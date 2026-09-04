@@ -1,0 +1,24 @@
+# Optional: run MySQL in Docker instead of installing it.
+# Start:  docker compose up -d
+# Stop:   docker compose down
+# The app connects with the same defaults (root/root, db url_shortener).
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: urlshortener-mysql
+    environment:
+      MYSQL_DATABASE: url_shortener
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  mysql-data:
