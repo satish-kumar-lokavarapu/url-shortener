@@ -79,6 +79,13 @@
 			<scope>test</scope>
 		</dependency>
 
+		<!-- MockMvc support for tests (Spring Boot 4 moved it to its own starter) -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-webmvc-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+
 		<!-- In-memory DB for integration tests (MySQL compatibility mode) -->
 		<dependency>
 			<groupId>com.h2database</groupId>
