@@ -35,14 +35,19 @@ public class UrlMapping {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    /** When this link stops working. NULL = never expires. */
+    @Column(name = "expires_at")
+    private Instant expiresAt;
+
     /** JPA needs an empty constructor. */
     protected UrlMapping() {
     }
 
-    public UrlMapping(String shortCode, String originalUrl, Instant createdAt) {
+    public UrlMapping(String shortCode, String originalUrl, Instant createdAt, Instant expiresAt) {
         this.shortCode = shortCode;
         this.originalUrl = originalUrl;
         this.createdAt = createdAt;
+        this.expiresAt = expiresAt;
     }
 
     public Long getId() {
@@ -59,5 +64,14 @@ public class UrlMapping {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public Instant getExpiresAt() {
+        return expiresAt;
+    }
+
+    /** True if this link has an expiry time and that time has passed. */
+    public boolean isExpired() {
+        return expiresAt != null && Instant.now().isAfter(expiresAt);
     }
 }

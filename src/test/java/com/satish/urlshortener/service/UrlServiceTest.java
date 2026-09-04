@@ -3,6 +3,7 @@ package com.satish.urlshortener.service;
 import com.satish.urlshortener.config.ShortenerProperties;
 import com.satish.urlshortener.exception.InvalidUrlException;
 import com.satish.urlshortener.exception.ShortCodeGenerationException;
+import com.satish.urlshortener.exception.UrlExpiredException;
 import com.satish.urlshortener.exception.UrlNotFoundException;
 import com.satish.urlshortener.model.UrlMapping;
 import com.satish.urlshortener.repository.UrlMappingRepository;
@@ -13,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -52,24 +54,25 @@ class UrlServiceTest {
         when(repository.saveAndFlush(any(UrlMapping.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        UrlMapping result = urlService.shorten("https://example.com/page");
+        UrlMapping result = urlService.shorten("https://example.com/page", null);
 
         assertThat(result.getShortCode()).isEqualTo("abc1234");
         assertThat(result.getOriginalUrl()).isEqualTo("https://example.com/page");
+        assertThat(result.getExpiresAt()).isNull();
     }
 
     @Test
     void shortenRejectsEmptyUrl() {
-        assertThatThrownBy(() -> urlService.shorten(""))
+        assertThatThrownBy(() -> urlService.shorten("", null))
                 .isInstanceOf(InvalidUrlException.class);
     }
 
     @Test
     void shortenRejectsNonHttpUrl() {
-        assertThatThrownBy(() -> urlService.shorten("ftp://example.com/file"))
+        assertThatThrownBy(() -> urlService.shorten("ftp://example.com/file", null))
                 .isInstanceOf(InvalidUrlException.class);
 
-        assertThatThrownBy(() -> urlService.shorten("javascript:alert(1)"))
+        assertThatThrownBy(() -> urlService.shorten("javascript:alert(1)", null))
                 .isInstanceOf(InvalidUrlException.class);
     }
 
@@ -77,13 +80,13 @@ class UrlServiceTest {
     void shortenRejectsTooLongUrl() {
         String longUrl = "https://example.com/" + "a".repeat(3000);
 
-        assertThatThrownBy(() -> urlService.shorten(longUrl))
+        assertThatThrownBy(() -> urlService.shorten(longUrl, null))
                 .isInstanceOf(InvalidUrlException.class);
     }
 
     @Test
     void shortenRejectsUrlWithoutHost() {
-        assertThatThrownBy(() -> urlService.shorten("https://"))
+        assertThatThrownBy(() -> urlService.shorten("https://", null))
                 .isInstanceOf(InvalidUrlException.class);
     }
 
@@ -96,7 +99,7 @@ class UrlServiceTest {
         when(repository.saveAndFlush(any(UrlMapping.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        UrlMapping result = urlService.shorten("https://example.com");
+        UrlMapping result = urlService.shorten("https://example.com", null);
 
         assertThat(result.getShortCode()).isEqualTo("BBBBBBB");
     }
@@ -107,7 +110,7 @@ class UrlServiceTest {
         when(codeGenerator.generate()).thenReturn("AAAAAAA");
         when(repository.existsByShortCode("AAAAAAA")).thenReturn(true);
 
-        assertThatThrownBy(() -> urlService.shorten("https://example.com"))
+        assertThatThrownBy(() -> urlService.shorten("https://example.com", null))
                 .isInstanceOf(ShortCodeGenerationException.class);
 
         // Save was never called because no free code was found
@@ -116,7 +119,7 @@ class UrlServiceTest {
 
     @Test
     void resolveReturnsMappingWhenCodeExists() {
-        UrlMapping mapping = new UrlMapping("abc1234", "https://example.com", Instant.now());
+        UrlMapping mapping = new UrlMapping("abc1234", "https://example.com", Instant.now(), null);
         when(repository.findByShortCode("abc1234")).thenReturn(Optional.of(mapping));
 
         UrlMapping result = urlService.resolve("abc1234");
@@ -137,5 +140,38 @@ class UrlServiceTest {
         String result = urlService.buildShortUrl("abc1234");
 
         assertThat(result).isEqualTo("http://localhost:8080/abc1234");
+    }
+
+    // ---------- Expiration tests (Phase 2) ----------
+
+    @Test
+    void shortenRejectsExpiryTimeInThePast() {
+        Instant pastTime = Instant.now().minus(1, ChronoUnit.DAYS);
+
+        assertThatThrownBy(() -> urlService.shorten("https://example.com", pastTime))
+                .isInstanceOf(InvalidUrlException.class);
+    }
+
+    @Test
+    void shortenAcceptsExpiryTimeInTheFuture() {
+        Instant futureTime = Instant.now().plus(1, ChronoUnit.DAYS);
+        when(codeGenerator.generate()).thenReturn("abc1234");
+        when(repository.existsByShortCode("abc1234")).thenReturn(false);
+        when(repository.saveAndFlush(any(UrlMapping.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        UrlMapping result = urlService.shorten("https://example.com", futureTime);
+
+        assertThat(result.getExpiresAt()).isEqualTo(futureTime);
+    }
+
+    @Test
+    void resolveThrowsWhenLinkHasExpired() {
+        Instant pastTime = Instant.now().minus(1, ChronoUnit.HOURS);
+        UrlMapping expired = new UrlMapping("old1234", "https://example.com", Instant.now(), pastTime);
+        when(repository.findByShortCode("old1234")).thenReturn(Optional.of(expired));
+
+        assertThatThrownBy(() -> urlService.resolve("old1234"))
+                .isInstanceOf(UrlExpiredException.class);
     }
 }

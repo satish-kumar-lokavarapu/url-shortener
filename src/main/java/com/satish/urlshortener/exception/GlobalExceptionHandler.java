@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * - validation errors (@Valid)     -> 400 Bad Request
  * - body missing / broken JSON     -> 400 Bad Request
  * - UrlNotFoundException           -> 404 Not Found
+ * - UrlExpiredException            -> 410 Gone
  * - ShortCodeGenerationException   -> 500 Internal Server Error
  * - any other exception            -> 500, without showing details
  */
@@ -57,6 +58,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleNotFound(UrlNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ErrorResponse.of(404, e.getMessage()));
+    }
+
+    /** Link exists but expiry time has passed -> 410 Gone. */
+    @ExceptionHandler(UrlExpiredException.class)
+    public ResponseEntity<ErrorResponse> handleExpired(UrlExpiredException e) {
+        return ResponseEntity.status(HttpStatus.GONE)
+                .body(ErrorResponse.of(410, e.getMessage()));
     }
 
     /** Could not create a unique code -> 500. */

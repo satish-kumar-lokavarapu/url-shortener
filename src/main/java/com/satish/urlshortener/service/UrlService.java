@@ -3,6 +3,7 @@ package com.satish.urlshortener.service;
 import com.satish.urlshortener.config.ShortenerProperties;
 import com.satish.urlshortener.exception.InvalidUrlException;
 import com.satish.urlshortener.exception.ShortCodeGenerationException;
+import com.satish.urlshortener.exception.UrlExpiredException;
 import com.satish.urlshortener.exception.UrlNotFoundException;
 import com.satish.urlshortener.model.UrlMapping;
 import com.satish.urlshortener.repository.UrlMappingRepository;
@@ -37,6 +38,7 @@ public class UrlService {
 
     /**
      * Creates a short code for the given URL and saves the mapping.
+     * expiresAt is optional: NULL means the link never expires.
      *
      * Collision handling: if the generated code already exists,
      * we try again with a new code, up to maxCollisionRetries times.
@@ -45,8 +47,12 @@ public class UrlService {
      * the database accepts only one, and the other request retries.
      */
     @Transactional
-    public UrlMapping shorten(String originalUrl) {
+    public UrlMapping shorten(String originalUrl, Instant expiresAt) {
         String validatedUrl = validateUrl(originalUrl);
+
+        if (expiresAt != null && !expiresAt.isAfter(Instant.now())) {
+            throw new InvalidUrlException("expiresAt must be a time in the future");
+        }
 
         int maxTries = properties.maxCollisionRetries();
         for (int attempt = 1; attempt <= maxTries; attempt++) {
@@ -58,7 +64,7 @@ public class UrlService {
             }
 
             try {
-                UrlMapping mapping = new UrlMapping(code, validatedUrl, Instant.now());
+                UrlMapping mapping = new UrlMapping(code, validatedUrl, Instant.now(), expiresAt);
                 return repository.saveAndFlush(mapping);
             } catch (DataIntegrityViolationException e) {
                 // Another request saved the same code a moment before us.
@@ -71,12 +77,19 @@ public class UrlService {
     }
 
     /**
-     * Returns the mapping for a short code, or throws 404 if unknown.
+     * Returns the mapping for a short code.
+     * Throws 404 if the code is unknown, 410 if the link has expired.
      */
     @Transactional(readOnly = true)
     public UrlMapping resolve(String shortCode) {
-        return repository.findByShortCode(shortCode)
+        UrlMapping mapping = repository.findByShortCode(shortCode)
                 .orElseThrow(() -> new UrlNotFoundException(shortCode));
+
+        if (mapping.isExpired()) {
+            throw new UrlExpiredException(shortCode);
+        }
+
+        return mapping;
     }
 
     /**

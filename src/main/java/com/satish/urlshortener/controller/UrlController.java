@@ -17,7 +17,7 @@ import java.net.URI;
 
 /**
  * REST endpoints of the URL shortener.
- * - POST /api/urls    : create a short URL
+ * - POST /api/urls    : create a short URL (optional expiresAt)
  * - GET  /{shortCode} : redirect to the original URL
  */
 @RestController
@@ -36,13 +36,14 @@ public class UrlController {
      */
     @PostMapping("/api/urls")
     public ResponseEntity<ShortenUrlResponse> shorten(@Valid @RequestBody ShortenUrlRequest request) {
-        UrlMapping mapping = urlService.shorten(request.url());
+        UrlMapping mapping = urlService.shorten(request.url(), request.expiresAt());
 
         ShortenUrlResponse response = new ShortenUrlResponse(
                 mapping.getShortCode(),
                 urlService.buildShortUrl(mapping.getShortCode()),
                 mapping.getOriginalUrl(),
-                mapping.getCreatedAt()
+                mapping.getCreatedAt(),
+                mapping.getExpiresAt()
         );
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
