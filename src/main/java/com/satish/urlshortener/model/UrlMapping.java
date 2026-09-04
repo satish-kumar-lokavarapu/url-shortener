@@ -12,7 +12,7 @@ import java.time.Instant;
 /**
  * One row in the url_mapping table.
  * Stores one short code and the original long URL it points to.
- * The table itself is created by Flyway (V1__init.sql).
+ * The table itself is created by Flyway migrations (V1, V2, V3).
  */
 @Entity
 @Table(name = "url_mapping")
@@ -38,6 +38,14 @@ public class UrlMapping {
     /** When this link stops working. NULL = never expires. */
     @Column(name = "expires_at")
     private Instant expiresAt;
+
+    /** How many times this short link was opened. Starts at 0. */
+    @Column(name = "click_count", nullable = false)
+    private long clickCount;
+
+    /** When this link was opened last time. NULL = never opened. */
+    @Column(name = "last_accessed_at")
+    private Instant lastAccessedAt;
 
     /** JPA needs an empty constructor. */
     protected UrlMapping() {
@@ -68,6 +76,14 @@ public class UrlMapping {
 
     public Instant getExpiresAt() {
         return expiresAt;
+    }
+
+    public long getClickCount() {
+        return clickCount;
+    }
+
+    public Instant getLastAccessedAt() {
+        return lastAccessedAt;
     }
 
     /** True if this link has an expiry time and that time has passed. */

@@ -20,6 +20,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -173,5 +174,42 @@ class UrlServiceTest {
 
         assertThatThrownBy(() -> urlService.resolve("old1234"))
                 .isInstanceOf(UrlExpiredException.class);
+    }
+
+    // ---------- Analytics tests (Phase 3) ----------
+
+    @Test
+    void resolveCountsTheClick() {
+        UrlMapping mapping = new UrlMapping("abc1234", "https://example.com", Instant.now(), null);
+        when(repository.findByShortCode("abc1234")).thenReturn(Optional.of(mapping));
+
+        urlService.resolve("abc1234");
+
+        // The click counter update was called for this code
+        verify(repository).incrementClickCount(eq("abc1234"), any(Instant.class));
+    }
+
+    @Test
+    void resolveDoesNotCountExpiredLink() {
+        Instant pastTime = Instant.now().minus(1, ChronoUnit.HOURS);
+        UrlMapping expired = new UrlMapping("old1234", "https://example.com", Instant.now(), pastTime);
+        when(repository.findByShortCode("old1234")).thenReturn(Optional.of(expired));
+
+        assertThatThrownBy(() -> urlService.resolve("old1234"))
+                .isInstanceOf(UrlExpiredException.class);
+
+        // Expired link -> no click counted
+        verify(repository, never()).incrementClickCount(any(), any());
+    }
+
+    @Test
+    void getMappingDoesNotCountAClick() {
+        UrlMapping mapping = new UrlMapping("abc1234", "https://example.com", Instant.now(), null);
+        when(repository.findByShortCode("abc1234")).thenReturn(Optional.of(mapping));
+
+        urlService.getMapping("abc1234");
+
+        // Reading statistics is not a visit
+        verify(repository, never()).incrementClickCount(any(), any());
     }
 }

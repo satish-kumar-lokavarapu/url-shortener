@@ -17,7 +17,8 @@ import java.time.Instant;
 /**
  * Main business logic of the URL shortener.
  * - shorten: validate the URL, create a unique code, save it
- * - resolve: find the original URL for a short code
+ * - resolve: find the original URL for a short code, count the click
+ * - getMapping: read a mapping for the analytics endpoint
  */
 @Service
 public class UrlService {
@@ -77,10 +78,11 @@ public class UrlService {
     }
 
     /**
-     * Returns the mapping for a short code.
+     * Returns the mapping for a short code and counts the click.
      * Throws 404 if the code is unknown, 410 if the link has expired.
+     * Expired or unknown links are NOT counted.
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public UrlMapping resolve(String shortCode) {
         UrlMapping mapping = repository.findByShortCode(shortCode)
                 .orElseThrow(() -> new UrlNotFoundException(shortCode));
@@ -89,7 +91,20 @@ public class UrlService {
             throw new UrlExpiredException(shortCode);
         }
 
+        repository.incrementClickCount(shortCode, Instant.now());
+
         return mapping;
+    }
+
+    /**
+     * Returns the mapping for the analytics endpoint.
+     * Does NOT count a click: looking at statistics is not a visit.
+     * Works also for expired links, so old statistics stay readable.
+     */
+    @Transactional(readOnly = true)
+    public UrlMapping getMapping(String shortCode) {
+        return repository.findByShortCode(shortCode)
+                .orElseThrow(() -> new UrlNotFoundException(shortCode));
     }
 
     /**

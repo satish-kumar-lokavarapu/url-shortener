@@ -99,4 +99,32 @@ class UrlControllerIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400));
     }
+
+    @Test
+    void analyticsShowsClickCount() throws Exception {
+        // Create a link
+        String body = mockMvc.perform(post("/api/urls")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"url\": \"https://example.com/stats\"}"))
+                .andReturn().getResponse().getContentAsString();
+        String shortCode = body.replaceAll(".*\"shortCode\":\"([^\"]+)\".*", "$1");
+
+        // Open it 3 times
+        mockMvc.perform(get("/" + shortCode));
+        mockMvc.perform(get("/" + shortCode));
+        mockMvc.perform(get("/" + shortCode));
+
+        // Statistics show 3 clicks and a last access time
+        mockMvc.perform(get("/api/urls/" + shortCode + "/analytics"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.clickCount").value(3))
+                .andExpect(jsonPath("$.lastAccessedAt").exists())
+                .andExpect(jsonPath("$.expired").value(false));
+    }
+
+    @Test
+    void analyticsForUnknownCodeReturns404() throws Exception {
+        mockMvc.perform(get("/api/urls/nothere1/analytics"))
+                .andExpect(status().isNotFound());
+    }
 }

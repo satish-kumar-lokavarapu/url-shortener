@@ -2,6 +2,7 @@ package com.satish.urlshortener.controller;
 
 import com.satish.urlshortener.dto.ShortenUrlRequest;
 import com.satish.urlshortener.dto.ShortenUrlResponse;
+import com.satish.urlshortener.dto.UrlAnalyticsResponse;
 import com.satish.urlshortener.model.UrlMapping;
 import com.satish.urlshortener.service.UrlService;
 import jakarta.validation.Valid;
@@ -17,8 +18,9 @@ import java.net.URI;
 
 /**
  * REST endpoints of the URL shortener.
- * - POST /api/urls    : create a short URL (optional expiresAt)
- * - GET  /{shortCode} : redirect to the original URL
+ * - POST /api/urls                      : create a short URL (optional expiresAt)
+ * - GET  /{shortCode}                   : redirect to the original URL
+ * - GET  /api/urls/{shortCode}/analytics : usage statistics of a short link
  */
 @RestController
 public class UrlController {
@@ -50,9 +52,10 @@ public class UrlController {
 
     /**
      * Opens a short link: finds the original URL and redirects to it.
+     * Every successful redirect counts as one click.
      * Uses 302 (temporary redirect), not 301 (permanent).
      * Reason: browsers remember a 301 forever and stop calling us,
-     * then we could never count clicks (analytics comes later).
+     * then we could never count clicks.
      */
     @GetMapping("/{shortCode}")
     public ResponseEntity<Void> redirect(@PathVariable String shortCode) {
@@ -61,5 +64,24 @@ public class UrlController {
         return ResponseEntity.status(HttpStatus.FOUND)      // 302
                 .location(URI.create(mapping.getOriginalUrl()))
                 .build();
+    }
+
+    /**
+     * Shows usage statistics for a short link.
+     * Does not count as a click. Also works for expired links.
+     */
+    @GetMapping("/api/urls/{shortCode}/analytics")
+    public UrlAnalyticsResponse analytics(@PathVariable String shortCode) {
+        UrlMapping mapping = urlService.getMapping(shortCode);
+
+        return new UrlAnalyticsResponse(
+                mapping.getShortCode(),
+                mapping.getOriginalUrl(),
+                mapping.getClickCount(),
+                mapping.getCreatedAt(),
+                mapping.getLastAccessedAt(),
+                mapping.getExpiresAt(),
+                mapping.isExpired()
+        );
     }
 }
