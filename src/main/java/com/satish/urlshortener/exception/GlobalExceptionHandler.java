@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * Mapping:
  * - InvalidUrlException            -> 400 Bad Request
  * - validation errors (@Valid)     -> 400 Bad Request
+ * - body missing / broken JSON     -> 400 Bad Request
  * - UrlNotFoundException           -> 404 Not Found
  * - ShortCodeGenerationException   -> 500 Internal Server Error
  * - any other exception            -> 500, without showing details
@@ -41,6 +43,13 @@ public class GlobalExceptionHandler {
                 .orElse("Request body is not valid");
         return ResponseEntity.badRequest()
                 .body(ErrorResponse.of(400, message));
+    }
+
+    /** Body missing or not valid JSON -> 400. */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleUnreadableBody(HttpMessageNotReadableException e) {
+        return ResponseEntity.badRequest()
+                .body(ErrorResponse.of(400, "Request body is missing or not valid JSON"));
     }
 
     /** Short code does not exist -> 404. */

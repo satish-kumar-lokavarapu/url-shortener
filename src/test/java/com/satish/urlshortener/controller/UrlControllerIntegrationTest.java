@@ -91,4 +91,12 @@ class UrlControllerIntegrationTest {
                         .content("{\"url\": \"\"}"))
                 .andExpect(status().isBadRequest());
     }
+
+    @Test
+    void missingBodyReturns400() throws Exception {
+        mockMvc.perform(post("/api/urls")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+    }
 }
